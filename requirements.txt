@@ -3,3 +3,5 @@
 # github.com/openai/openai-go           -> openai
 anthropic>=0.40.0
 openai>=1.60.0
+# github.com/larksuite/oapi-sdk-go/v3  -> lark-oapi
+lark-oapi>=1.4.0

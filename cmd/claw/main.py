@@ -1,7 +1,10 @@
 # cmd/claw/main.py
 # 对应 Go 版: cmd/claw/main.go
-# 第 8 章：并行工具调用 —— 一次性读取 a.txt / b.txt / c.txt 三个文件。
-# 运行方式（在 py-tiny-claw-all 目录下）: python -m cmd.claw.main
+# 第 9 章：启动飞书机器人服务，把 Agent 接入群聊。
+# 与教材不同：这里用飞书「长连接」(WebSocket) 接收事件，而不是 Webhook HTTP 服务，
+# 由本机主动连上飞书开放平台，因此不需要公网 IP / ngrok。
+# 运行方式：在 PyCharm 里直接运行本文件即可（环境变量在 ~/.zshrc 中配置）。
+# 运行模式见下方 RUN_MODE：飞书机器人 / 本地终端对话，二选一。
 import logging
 import os
 import sys
@@ -11,7 +14,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
 
+import lark_oapi as lark
+
 from internal.engine.loop import AgentEngine
+from internal.engine.terminal_reporter import new_terminal_reporter
+from internal.feishu.bot import FeishuBot
 from internal.provider.openai import new_deepseek_provider
 from internal.tools.bash import BashTool
 from internal.tools.edit_file import EditFileTool
@@ -22,32 +29,50 @@ from internal.tools.write_file import WriteFileTool
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(message)s",
                     datefmt="%Y/%m/%d %H:%M:%S")
+log = logging.getLogger(__name__)
 
-# 测试 1：三个互相独立的读操作 -> 应当并发
-PROMPT_READ = """
-我当前目录下有 a.txt、b.txt、c.txt 三个文件。
-为了节省时间，请你在同一轮中一次性调用工具读取这三个文件，
-并将它们的内容综合起来告诉我。
-"""
-
-# 测试 2：同一轮里混入写操作 -> 应当退回串行
-PROMPT_MIX = """
-请在同一轮中同时完成两件事：
-1. 用 write_file 创建 d.txt，内容为"这是文件D"
-2. 用 read_file 读取 a.txt
-完成后告诉我 a.txt 的内容。
-"""
+# 运行模式：
+#   "feishu"   —— 启动飞书机器人，在飞书里对话（需要 FEISHU_APP_ID / FEISHU_APP_SECRET）
+#   "terminal" —— 不连飞书，直接在 PyCharm 控制台里输入问题，过程用 TerminalReporter 打印
+# RUN_MODE = "feishu"
+RUN_MODE = "terminal"
 
 
-def prepare_files(work_dir: Path):
-    """准备测试文件（等价于教材中的 3 条 echo 命令）"""
-    files = {
-        "a.txt": "这是文件A，里面记录了前端的报错日志。",
-        "b.txt": "这是文件B，里面记录了后端的接口响应时间。",
-        "c.txt": "这是文件C，里面写着今天的日期是周五。",
-    }
-    for name, text in files.items():
-        (work_dir / name).write_text(text + "\n", encoding="utf-8")
+
+def run_terminal(eng: AgentEngine):
+    """终端对话模式：循环读取输入，每句话跑一次引擎，输入 exit 退出。"""
+    reporter = new_terminal_reporter()
+    print("💻 终端模式已启动，输入你的问题（输入 exit 退出）")
+    while True:
+        try:
+            prompt = input("\n👤 你: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            break
+        if prompt in ("exit", "quit"):
+            break
+        if prompt == "":
+            continue
+        try:
+            eng.run(prompt, reporter)
+        except Exception as e:
+            print(f"❌ Agent 运行崩溃: {e}")
+
+
+def run_feishu(eng: AgentEngine):
+    """飞书模式：通过长连接接收飞书消息，过程用 FeishuReporter 发回飞书。"""
+    bot = FeishuBot(eng)
+    ws_client = lark.ws.Client(
+        bot.app_id,
+        bot.app_secret,
+        event_handler=bot.get_event_dispatcher(),
+        log_level=lark.LogLevel.INFO,
+    )
+
+    log.info("🚀 py-tiny-claw-all 飞书机器人已启动，正在通过长连接接收事件...")
+    try:
+        ws_client.start()  # 阻塞运行，断线会自动重连
+    except Exception as e:
+        sys.exit(f"飞书长连接启动失败: {e}")
 
 
 def main():
@@ -56,7 +81,6 @@ def main():
 
     work_dir = PROJECT_ROOT / "workspace"
     work_dir.mkdir(exist_ok=True)
-    prepare_files(work_dir)
 
     llm_provider = new_deepseek_provider("deepseek-v4-flash")
     registry = new_registry()
@@ -65,13 +89,13 @@ def main():
     registry.register(BashTool(str(work_dir)))
     registry.register(EditFileTool(str(work_dir)))
 
-    # 为节省 token 关闭慢思考；模型不肯一次发多个调用时可改为 True
+    # 为节省 token 关闭慢思考；想在飞书里看到 "🤔 慢思考" 提示可改为 True
     eng = AgentEngine(llm_provider, registry, str(work_dir), False)
 
-    try:
-        eng.run(PROMPT_READ)   # 测试 2 时改为 eng.run(PROMPT_MIX)
-    except Exception as e:
-        sys.exit(f"引擎运行崩溃: {e}")
+    if RUN_MODE == "terminal":
+        run_terminal(eng)
+    else:
+        run_feishu(eng)
 
 
 if __name__ == "__main__":
