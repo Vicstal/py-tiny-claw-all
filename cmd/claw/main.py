@@ -34,8 +34,8 @@ log = logging.getLogger(__name__)
 # 运行模式：
 #   "feishu"   —— 启动飞书机器人，在飞书里对话（需要 FEISHU_APP_ID / FEISHU_APP_SECRET）
 #   "terminal" —— 不连飞书，直接在 PyCharm 控制台里输入问题，过程用 TerminalReporter 打印
-# RUN_MODE = "feishu"
-RUN_MODE = "terminal"
+RUN_MODE = "feishu"
+# RUN_MODE = "terminal"
 
 
 
@@ -57,9 +57,11 @@ def run_terminal(eng: AgentEngine):
         except Exception as e:
             print(f"❌ Agent 运行崩溃: {e}")
 
-
+"""
+        飞书通过长连接推送 im.message.receive_v1 事件,
+        程序通过长连接接收飞书消息，过程用 FeishuReporter 发回飞书。
+"""
 def run_feishu(eng: AgentEngine):
-    """飞书模式：通过长连接接收飞书消息，过程用 FeishuReporter 发回飞书。"""
     bot = FeishuBot(eng)
     ws_client = lark.ws.Client(
         bot.app_id,

@@ -28,13 +28,16 @@ from internal.engine.reporter import Reporter
 
 log = logging.getLogger(__name__)
 
-
+"""
+    飞书机器人"接收端"：负责听消息、把消息交给引擎去跑。
+"""
 class FeishuBot:
-    """飞书机器人"接收端"：负责听消息、把消息交给引擎去跑。"""
 
+    """
+        初始化：读取飞书凭证，创建一个用于调用飞书 OpenAPI 的客户端。
+        eng: 已经装配好 Provider 和工具的 Agent 引擎，所有消息共用这一个引擎。
+    """
     def __init__(self, eng: AgentEngine):
-        """初始化：读取飞书凭证，创建一个用于调用飞书 OpenAPI 的客户端。
-        eng: 已经装配好 Provider 和工具的 Agent 引擎，所有消息共用这一个引擎。"""
         # 从环境变量读取应用凭证（在飞书开发者后台「凭证与基础信息」里获取）
         app_id = os.getenv("FEISHU_APP_ID")
         app_secret = os.getenv("FEISHU_APP_SECRET")
@@ -42,7 +45,7 @@ class FeishuBot:
         if not app_id or not app_secret:
             sys.exit("请设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET")
 
-        # lark.Client 是调用飞书 API 的"遥控器"，比如后面用它发消息。
+        # lark.Client 是调用飞书 API，比如后面用它发消息。
         # SDK 会用 app_id/app_secret 自动换取并刷新访问令牌（tenant_access_token）。
         client = lark.Client.builder().app_id(app_id).app_secret(app_secret).build()
 
@@ -51,17 +54,23 @@ class FeishuBot:
         self.app_secret = app_secret
         self.engine = eng
 
-    def get_event_dispatcher(self) -> lark.EventDispatcherHandler:
-        """创建"事件分发器"：告诉 SDK 收到哪种事件时该调用哪个函数。
+        """
+        创建"事件分发器"：告诉 SDK 收到哪种事件时该调用哪个函数。
         这里只注册了一种事件 —— 收到消息（im.message.receive_v1）。
-        返回的分发器会交给 main.py 里的长连接客户端使用。"""
+        返回的分发器会交给 main.py 里的长连接客户端使用。
+        """
+    def get_event_dispatcher(self) -> lark.EventDispatcherHandler:
+
         # 长连接模式下飞书不做加密/验签，这两个值留空即可
         encrypt_key = os.getenv("FEISHU_ENCRYPT_KEY", "")
         verify_token = os.getenv("FEISHU_VERIFY_TOKEN", "")
 
+        """
+            每当有人给机器人发消息（私聊或群里 @ 它），SDK 就会调用这个函数。
+            event 里装着消息的全部信息：发送者、会话 ID、消息内容等。
+        """
         def on_message_receive(event: P2ImMessageReceiveV1) -> None:
-            """每当有人给机器人发消息（私聊或群里 @ 它），SDK 就会调用这个函数。
-            event 里装着消息的全部信息：发送者、会话 ID、消息内容等。"""
+
             message = event.event.message
             # 图片、文件、表情等非文本消息直接忽略
             if message.message_type != "text":
@@ -77,7 +86,7 @@ class FeishuBot:
             chat_id = message.chat_id
             log.info("[Feishu] 收到会话 %s 消息: %s", chat_id, content_str)
 
-            # 后台线程运行 Agent（对应 Go 版的 go b.handleAgentRun），
+            # 后台线程运行 Agent，
             # 避免阻塞事件回调导致飞书侧超时重推。
             # Agent 一跑可能几十秒，如果在这里直接跑，SDK 就卡住收不了下一条消息；
             # 开线程后本函数立刻返回，多条消息可以同时各跑各的。
