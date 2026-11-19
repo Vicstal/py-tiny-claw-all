@@ -52,8 +52,7 @@ class AgentEngine:
             if self.enable_thinking:
                 if reporter is not None:
                     reporter.on_thinking()
-                log.info("[Engine][Phase 1] 剥夺工具访问权，"
-                         "强制进入慢思考与规划阶段...")
+                log.info("[Engine][Phase 1] 剥夺工具访问权，""强制进入慢思考与规划阶段...")
                 try:
                     # 传入 None 剥夺工具
                     think_resp = self.provider.generate(
@@ -65,9 +64,8 @@ class AgentEngine:
                     log.info("🧠 [内部思考 Trace]: %s", think_resp.content)
                     context_history.append(think_resp)
 
-            # ============ Phase 2: Action ============
-            log.info("[Engine][Phase 2] 恢复工具挂载，"
-                     "等待模型采取行动...")
+            # ============ Phase 2: ReSon思考 ============
+            log.info("[Engine][Phase 2] 恢复工具挂载，""等待模型采取行动...")
             try:
                 action_resp = self.provider.generate(
                     context_history, available_tools)
@@ -85,8 +83,7 @@ class AgentEngine:
                 log.info("[Engine] 模型未请求调用工具，任务宣告完成。")
                 break
 
-            log.info("[Engine] 模型请求调用 %d 个工具...",
-                     len(tool_calls))
+            log.info("[Engine] 模型请求调用 %d 个工具...",len(tool_calls))
 
             # ① 判断本批次能否并发：多于 1 个，且全部是只读工具
             can_parallel = len(tool_calls) > 1 and all(
@@ -100,8 +97,7 @@ class AgentEngine:
             )
 
             def run_tool(idx: int, call: ToolCall):
-                log.info("  -> [Worker-%d] 🛠️ 开始执行: %s",
-                         idx, call.name)
+                log.info("  -> [Worker-%d] 🛠️ 开始执行: %s",idx, call.name)
                 if reporter is not None:
                     reporter.on_tool_call(call.name, call.arguments)
 

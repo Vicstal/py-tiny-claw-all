@@ -58,7 +58,7 @@ def run_terminal(eng: AgentEngine):
             print(f"❌ Agent 运行崩溃: {e}")
 
 """
-        飞书通过长连接推送 im.message.receive_v1 事件,
+        飞书通过长连接推送事件,
         程序通过长连接接收飞书消息，过程用 FeishuReporter 发回飞书。
 """
 def run_feishu(eng: AgentEngine):
@@ -66,7 +66,7 @@ def run_feishu(eng: AgentEngine):
     ws_client = lark.ws.Client(
         bot.app_id,
         bot.app_secret,
-        event_handler=bot.get_event_dispatcher(),
+        event_handler=bot.get_event_dispatcher(),  # 程序通过长连接接收飞书消息，调用大模型将结果用 FeishuReporter 发回飞书。
         log_level=lark.LogLevel.INFO,
     )
 
