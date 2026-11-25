@@ -10,6 +10,7 @@ from internal.schema.message import (
 from internal.tools.registry import Registry
 
 log = logging.getLogger(__name__)
+log.setLevel(logging.ERROR)
 
 # 只读工具白名单：只有名单里的工具允许并发执行。
 # write_file / edit_file / bash 都可能修改文件，一律按"写"处理。
@@ -26,8 +27,7 @@ class AgentEngine:
 
     def run(self, user_prompt: str, reporter: Reporter | None) -> None:
         log.info("[Engine] 引擎启动，锁定工作区: %s", self.work_dir)
-        log.info("[Engine] 慢思考模式 (Thinking Phase): %s",
-                 self.enable_thinking)
+        log.info("[Engine] 慢思考模式 (Thinking Phase): %s",self.enable_thinking)
 
         context_history: list[Message] = [
             Message(
@@ -48,7 +48,7 @@ class AgentEngine:
 
             available_tools = self.registry.get_available_tools()
 
-            # ============ Phase 1: Thinking ============
+            # ============ Phase 1: 慢思考Thinking ============
             if self.enable_thinking:
                 if reporter is not None:
                     reporter.on_thinking()

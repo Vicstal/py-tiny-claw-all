@@ -53,6 +53,7 @@ class FeishuBot:
         self.app_id = app_id
         self.app_secret = app_secret
         self.engine = eng
+        self.run_lock = threading.Lock()   # 同一时刻只允许一个 Agent 运行
 
         """
         创建"事件分发器"：告诉 SDK 收到哪种事件时该调用哪个函数。
@@ -110,11 +111,13 @@ class FeishuBot:
         # 每条消息新建一个 Reporter，绑定到对应会话，保证不同会话的回复不会串
         reporter = FeishuReporter(client=self.client, chat_id=chat_id)
 
-        try:
-            self.engine.run(prompt, reporter)
-        except Exception as e:
-            # 引擎出错（如模型 API 调用失败）时，把错误发到飞书，而不是只在终端默默报错
-            reporter.send_msg(f"❌ Agent 运行崩溃: {e}")
+        # 拿到锁才开始运行，其他消息在此排队，避免多个 run() 同时改 workspace
+        with self.run_lock:
+            try:
+                self.engine.run(prompt, reporter)
+            except Exception as e:
+                # 引擎出错（如模型 API 调用失败）时，把错误发到飞书，而不是只在终端默默报错
+                reporter.send_msg(f"❌ Agent 运行崩溃: {e}")
 
 
 class FeishuReporter(Reporter):
